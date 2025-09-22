@@ -25,11 +25,13 @@ public class LegalProcessController {
         return legalProcessRepository.findAll();
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getLegalProcess(@PathVariable String id) {
-        Map<String, String> params = new HashMap<>();
-        params.put("id", id);
-        ResponseEntity<String> response = apiClient.getByNumeroRadicacion(params);
+
+    @GetMapping("/{numeroRadicacion}")
+    public ResponseEntity<?> getLegalProcess(
+            @PathVariable String numeroRadicacion,
+            @RequestParam Map<String, String> queryParams) {
+
+        ResponseEntity<String> response = apiClient.getByNumeroRadicacion(numeroRadicacion, queryParams);
         if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
             return ResponseEntity.ok(response.getBody());
         } else {
