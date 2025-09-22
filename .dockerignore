@@ -1,0 +1,28 @@
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+*.iml
+
+# Build outputs
+target/
+
+# Local env/config
+.env
+application-local.properties
+
+# Scripts / archivos no necesarios para build
+mvnw.cmd
+
+# Node/Front (si existiera en el monorepo)
+node_modules/
+dist/
+build/
+
+# Otros
+Dockerfile
+README.md
+LICENSE
