@@ -1,29 +1,25 @@
 # Stage 1: Build the application
-FROM eclipse-temurin:23-jdk AS builder
+FROM eclipse-temurin:25-jdk AS builder
 
-# Set the working directory
 WORKDIR /app
 
-# Copy the application code
+# Copia todo el proyecto
 COPY . .
 
-# Given permissions to mvnw
+# Da permisos al wrapper
 RUN chmod +x mvnw
 
-# Build the application (requires Maven or Gradle)
+# Compila el proyecto (usa el wrapper Maven del repo)
 RUN ./mvnw clean package -DskipTests
 
 # Stage 2: Run the application
-FROM eclipse-temurin:23-jre
+FROM eclipse-temurin:25-jre
 
-# Set the working directory
 WORKDIR /app
 
-# Copy the JAR file from the builder stage
+# Copia el JAR generado
 COPY --from=builder /app/target/*.jar app.jar
 
-# Expose the port the app will run on
 EXPOSE 8080
 
-# Command to run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
