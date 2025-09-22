@@ -1,54 +1,43 @@
-# ====== Builder stage (full Maven + Temurin 25) ======
+# ====== Builder stage (Temurin 25 + Maven) ======
 FROM maven:3.9-eclipse-temurin-25 AS builder
 WORKDIR /workspace
 
-# Copia solo lo mínimo para cachear dependencias
+# Copiar pom y wrapper si existe (mejora cache)
 COPY pom.xml mvnw ./
 COPY .mvn .mvn
-RUN mvn -q -B -DskipTests dependency:go-offline
+RUN echo ">>> MAVEN: prefetch dependencies" && mvn -q -B -DskipTests dependency:go-offline
 
-# Copia el código fuente y empaqueta (sin tests para velocidad; ajusta si quieres tests)
+# Copiar el resto del código
 COPY src/ src/
-RUN mvn -q -B -DskipTests package
+COPY pom.xml .
 
-# ====== Runtime stage (Debian slim, non-root, using temurin 25 jre) ======
+# Ejecutar build con logs verbosos
+RUN echo ">>> MAVEN: package (this may take a while)" \
+ && mvn -B -DskipTests package || (echo "MAVEN BUILD FAILED"; ls -la target || true; exit 1)
+
+# Asegurar que el JAR existe
+RUN echo ">>> target contents:" && ls -la target
+
+# ====== Runtime stage (Debian slim + Temurin 25 JRE) ======
 FROM eclipse-temurin:25-jre-jammy AS runtime
 WORKDIR /app
 
-# Instalar dumb-init para manejo de señales (ligero y recomendado)
-# y limpiar caches para mantener la imagen pequeña
+# Instalar dumb-init
 RUN apt-get update \
  && apt-get install -y --no-install-recommends dumb-init ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 # Crear usuario no-root
-RUN groupadd --gid 1000 spring && \
-    useradd --uid 1000 --gid 1000 --create-home --home-dir /home/spring spring && \
-    mkdir -p /app/logs && chown -R spring:spring /app /home/spring
+RUN groupadd --gid 1000 spring && useradd --uid 1000 --gid 1000 --create-home --home-dir /home/spring spring \
+ && mkdir -p /app/logs /home/spring && chown -R spring:spring /app /home/spring
 
-USER spring:spring
-
-# Variables de entorno configurables (Render expone $PORT)
-ENV JAVA_OPTS=""
-ENV SERVER_PORT=8080
-ENV TZ=UTC
-
-# Secrets/props sensibles: NO poner valores reales aquí. Poner en Render dashboard.
-ENV SECURITY_SUPABASE_JWT_SECRET=""
-ENV SECURITY_SUPABASE_ISSUER=""
-ENV SECURITY_API_SECRET_KEY=""
-ENV API_EXTERNAL_BASE_URL=""
-
-# Copiar JAR construido desde el stage builder
-# Si tu build genera un -exec.jar u otro nombre, cambia el wildcard por el nombre exacto
+# Copiar jar desde builder (usa nombre exacto si lo conoces)
 COPY --from=builder --chown=spring:spring /workspace/target/*.jar /app/app.jar
 
-# Puerto (Render usa $PORT env var pero dejamos EXPOSE para documentación)
-EXPOSE 8080
+USER spring:spring
+ENV JAVA_OPTS=""
+ENV TZ=UTC
 
-# Recomendación de flags JVM container-aware y memoria % (ajusta según necesidades)
-# -XX:+UseContainerSupport es activado por defecto en JDK 25, pero dejamos opciones útiles:
-# -XX:MaxRAMPercentage controla cuánto RAM del contenedor puede usar la JVM (p. ej. 75%).
-# Puedes inyectar/reemplazar JAVA_OPTS en el dashboard de Render si necesitas más tuning.
+EXPOSE 8080
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "java $JAVA_OPTS -XX:MaxRAMPercentage=75.0 -XX:+UseStringDeduplication -jar /app/app.jar --server.port=${PORT:-8080}"]
+CMD ["sh", "-c", "java $JAVA_OPTS -XX:MaxRAMPercentage=75.0 -jar /app/app.jar --server.port=${PORT:-8080}"]
