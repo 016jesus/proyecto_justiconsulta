@@ -21,7 +21,9 @@
         <!-- Usar 21 para que coincida con la imagen Temurin:23 en tu builder/runtime -->
         <java.version>21</java.version>
         <!-- Fuerza comportamiento reproducible del compilador -->
-        <maven.compiler.release>23</maven.compiler.release>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.target>21</maven.compiler.target>
     </properties>
 
     <dependencies>
