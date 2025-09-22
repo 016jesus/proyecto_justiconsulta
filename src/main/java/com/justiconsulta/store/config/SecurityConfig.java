@@ -18,12 +18,18 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/css/**", "/js/**", "/public/**").permitAll()
+                        .requestMatchers(
+                                "/auth/**",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/css/**",
+                                "/js/**",
+                                "/public/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(supabaseJwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .logout(logout -> logout.logoutSuccessUrl("/").permitAll());
-
+                .addFilterBefore(supabaseJwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }
