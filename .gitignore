@@ -1,0 +1,51 @@
+# ---- Environment variables ----
+*.env
+
+# ---- Maven ----
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+.mvn/wrapper/MavenWrapperDownloader.java
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# ---- Spring Boot ----
+# Logs
+*.log
+*.log.*
+spring.log
+
+# ---- Java ----
+*.class
+*.war
+*.ear
+*.jar
+
+# ---- IDEs ----
+## IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+
+## VS Code
+.vscode/
+
+# ---- OS Files ----
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+
+
+# ---- Others ----
+*.swp
+*.swo
