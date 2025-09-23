@@ -25,19 +25,4 @@ public class LegalProcess {
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
-    }
-
-    public void setLastActionDate(OffsetDateTime lastActionDate) {
-        this.lastActionDate = lastActionDate;
-    }
-
-    public void setCreatedAt(OffsetDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
 }
