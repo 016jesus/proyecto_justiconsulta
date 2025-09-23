@@ -4,8 +4,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class ApiClient {
@@ -32,11 +38,24 @@ public class ApiClient {
         return restTemplate.getForEntity(builder.toUriString(), String.class);
     }
 
-    // Metodo genérico para otros endpoints
     public ResponseEntity<String> get(String endpoint, Map<String, ?> params) {
         String url = baseUrl + endpoint;
         return restTemplate.getForEntity(url, String.class, params);
     }
 
-    // Aquí puedes agregar más métodos para otros endpoints en el futuro
+    // Validar número de radicación consultando la API remota
+    public boolean validateId(String numeroRadicacion) {
+        if (numeroRadicacion == null || numeroRadicacion.isBlank()) {
+            return false;
+        }
+        try {
+            ResponseEntity<String> response = getByNumeroRadicacion(numeroRadicacion, Map.of());
+            return response != null
+                    && response.getStatusCode().is2xxSuccessful()
+                    && Objects.nonNull(response.getBody())
+                    && !response.getBody().isBlank();
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }

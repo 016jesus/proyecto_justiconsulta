@@ -12,7 +12,6 @@ import java.util.UUID;
 public class LegalProcess {
     @Id
     @GeneratedValue(generator = "UUID")
-    @org.hibernate.annotations.GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
     @Column(columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
@@ -26,27 +25,18 @@ public class LegalProcess {
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
-    public UUID getId() {
-        return id;
-    }
     public void setId(UUID id) {
         this.id = id;
     }
-    public User getUser() {
-        return user;
-    }
+
     public void setUser(User user) {
         this.user = user;
     }
-    public OffsetDateTime getLastActionDate() {
-        return lastActionDate;
-    }
+
     public void setLastActionDate(OffsetDateTime lastActionDate) {
         this.lastActionDate = lastActionDate;
     }
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
+
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
     }

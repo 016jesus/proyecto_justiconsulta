@@ -42,31 +42,44 @@ public class LegalProcessController {
             return ResponseEntity.notFound().build();
         }
     }
-
-    @PostMapping
-    public LegalProcess createLegalProcess(@RequestBody LegalProcess legalProcess) {
-        return legalProcessRepository.save(legalProcess);
-    }
-
-    @PostMapping("/users/{document_number}")
-    public ResponseEntity<LegalProcess> associateProcessToUser(
-            @PathVariable String document_number,
+    
+    @PostMapping("/{numeroRadicacion}")
+    public ResponseEntity<?> associateProcessToUser(
+            @PathVariable String numeroRadicacion,
             @RequestBody LegalProcess payload
     ) {
-        // 1) Cargar o referenciar el usuario (asumiendo que solo se necesita su id)
+
+        String document_number = payload.getUser() != null ? payload.getUser().getDocumentNumber() : null;
+        if (document_number == null) {
+            return ResponseEntity.badRequest().body("El usuario (document_number) es obligatorio.");
+        }
         Optional<User> user = userRepository.findByDocumentNumber(document_number);
-        // 2) Construir la entidad LegalProcess
-        LegalProcess entity = new LegalProcess();
-        entity.setUser(user.orElseThrow());
-        entity.setLastActionDate(payload.getLastActionDate());
-        entity.setCreatedAt(OffsetDateTime.now());
+        if (user.isEmpty()) {
+            return ResponseEntity.unprocessableEntity().body("Usuario no encontrado.");
+        }
+        payload.setUser(user.get());
+        if (payload.getCreatedAt() == null) {
+            payload.setCreatedAt(OffsetDateTime.now());
+        }
 
-        // 3) Guardar
-        LegalProcess saved = legalProcessRepository.save(entity);
+        return createAndPersistLegalProcess(payload);
+    }
 
-        // 4) Notificar (ej. usando un servicio de notificaciones)
-        // notificationService.createForLegalProcess(saved);
-
+    private ResponseEntity<?> createAndPersistLegalProcess(LegalProcess legalProcess) {
+        if (legalProcess.getId() == null) {
+            return ResponseEntity.badRequest().body("El id es obligatorio.");
+        }
+        if (legalProcessRepository.existsById(legalProcess.getId())) {
+            return ResponseEntity.unprocessableEntity().body("El id ya existe.");
+        }
+        boolean valido = apiClient.validateId(legalProcess.getId().toString());
+        if (!valido) {
+            return ResponseEntity.unprocessableEntity().body("El id no es válido según ApiClient.");
+        }
+        if (legalProcess.getCreatedAt() == null) {
+            legalProcess.setCreatedAt(OffsetDateTime.now());
+        }
+        LegalProcess saved = legalProcessRepository.save(legalProcess);
         return ResponseEntity.ok(saved);
     }
 }
