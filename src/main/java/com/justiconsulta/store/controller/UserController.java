@@ -14,11 +14,10 @@ import com.justiconsulta.store.service.EmailService;
 @Validated
 public class UserController {
     private final UserRepository userRepository;
-    private final EmailService emailService;
 
-    public UserController(UserRepository userRepository, EmailService emailService) {
+    public UserController(UserRepository userRepository) {
         this.userRepository = userRepository;
-        this.emailService = emailService;
+
     }
 
     @GetMapping
@@ -40,7 +39,6 @@ public class UserController {
             return ResponseEntity.status(409).build(); // Conflict
         }
         User savedUser = userRepository.save(user);
-        emailService.sendUserWelcomeEmail(savedUser);
         return ResponseEntity.status(201).body(savedUser);
     }
 }
