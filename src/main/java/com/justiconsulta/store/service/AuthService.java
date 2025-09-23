@@ -43,6 +43,14 @@ public class AuthService {
             throw new IllegalArgumentException("El usuario ya existe.");
         }
 
+
+        String rawPassword = payload.getEncryptedPassword();
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new IllegalArgumentException("password es obligatorio.");
+        }
+        String hashed = BCrypt.hashpw(rawPassword, BCrypt.gensalt(12));
+        payload.setEncryptedPassword(hashed);
+
         // Guardar usuario
         return userRepository.save(payload);
     }
