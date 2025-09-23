@@ -62,6 +62,7 @@ public class LegalProcessController {
             payload.setCreatedAt(OffsetDateTime.now());
         }
 
+        payload.setId(UUID.fromString(numeroRadicacion));
         return createAndPersistLegalProcess(payload);
     }
 
