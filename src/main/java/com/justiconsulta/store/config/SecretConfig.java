@@ -10,11 +10,6 @@ public class SecretConfig {
   @Value("${security.api.secret-key}")
   private String apiSecretKey;
 
-  // Supabase JWT secret (backend only)
-  @Value("${security.supabase.jwt-secret:}")
-  private String supabaseJwtSecret;
 
-  // Expected issuer, e.g., https://<project-ref>.supabase.co/auth/v1
-  @Value("${security.supabase.issuer:}")
-  private String supabaseIssuer;
+
 }
