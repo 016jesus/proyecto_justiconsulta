@@ -15,13 +15,12 @@ public class History {
     @Column(columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
-    @OneToOne
-    @JoinColumn(name = "legal_process_id", unique = true)
-    private LegalProcess legalProcess;
+    // Reemplazar relaciones por campos escalares UUID (sin FK)
+    @Column(name = "legal_process_id", columnDefinition = "uuid")
+    private UUID legalProcessId;
 
-    @ManyToOne
-    @JoinColumn(name = "activity_series_id")
-    private ActivitySeries activitySeries;
+    @Column(name = "activity_series_id", columnDefinition = "uuid")
+    private UUID activitySeriesId;
 
     @Column(name = "date", nullable = false)
     private OffsetDateTime date;

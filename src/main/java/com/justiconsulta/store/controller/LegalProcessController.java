@@ -63,18 +63,28 @@ public class LegalProcessController {
             payload.setCreatedAt(OffsetDateTime.now());
         }
 
-        payload.setId(UUID.fromString(numeroRadicacion));
+        // Construir el EmbeddedId (PK compuesta): id UUID + user_document_number
+        UUID processUuid;
+        try {
+            processUuid = UUID.fromString(numeroRadicacion);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body("numeroRadicacion no es un UUID válido.");
+        }
+        LegalProcess.LegalProcessId embeddedId = new LegalProcess.LegalProcessId(processUuid, user.get().getDocumentNumber());
+        payload.setId(embeddedId);
+
         return createAndPersistLegalProcess(payload);
     }
 
     private ResponseEntity<?> createAndPersistLegalProcess(LegalProcess legalProcess) {
-        if (legalProcess.getId() == null) {
-            return ResponseEntity.badRequest().body("El id es obligatorio.");
+        if (legalProcess.getId() == null || legalProcess.getId().getId() == null || legalProcess.getId().getUserDocumentNumber() == null) {
+            return ResponseEntity.badRequest().body("El id compuesto (id y user_document_number) es obligatorio.");
         }
-        if (legalProcessRepository.existsById(legalProcess.getId())) {
+        // Verificar existencia por PK compuesta
+        if (legalProcessRepository.existsById(UUID.fromString(legalProcess.getId().toString()))) {
             return ResponseEntity.unprocessableEntity().body("El id ya existe.");
         }
-        boolean valido = apiClient.validateId(legalProcess.getId().toString());
+        boolean valido = apiClient.validateId(legalProcess.getId().getId().toString());
         if (!valido) {
             return ResponseEntity.unprocessableEntity().body("El id no es válido según ApiClient.");
         }

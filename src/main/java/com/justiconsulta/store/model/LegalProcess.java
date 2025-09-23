@@ -3,20 +3,22 @@ package com.justiconsulta.store.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.io.Serializable;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(name = "legal_process")
-@Data @NoArgsConstructor @AllArgsConstructor
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class LegalProcess {
-    @Id
-    @GeneratedValue(generator = "UUID")
-    @Column(columnDefinition = "uuid", updatable = false, nullable = false)
-    private UUID id;
 
-    @ManyToOne
-    @JoinColumn(name = "user_document_number")
+    @EmbeddedId
+    private LegalProcessId id;
+
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_document_number", referencedColumnName = "document_number", nullable = false, insertable = false, updatable = false)
     private User user;
 
     @Column(name = "last_action_date")
@@ -25,4 +27,16 @@ public class LegalProcess {
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
+    @Embeddable
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LegalProcessId implements Serializable {
+
+        @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
+        private UUID id;
+
+        @Column(name = "user_document_number", length = 50, nullable = false)
+        private String userDocumentNumber;
+    }
 }

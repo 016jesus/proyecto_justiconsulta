@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -25,5 +27,23 @@ public class AuthService {
         }
 
         return jwtTokenService.generate(user.getDocumentNumber(), user.getEmail());
+    }
+
+
+    public Object register(User payload) {
+        if (payload == null) {
+            throw new IllegalArgumentException("Payload requerido.");
+        }
+        if (payload.getDocumentNumber() == null || payload.getDocumentNumber().isBlank()) {
+            throw new IllegalArgumentException("documentNumber es obligatorio.");
+        }
+        // Validar unicidad por documentNumber (ajusta si también validas por email/username)
+        Optional<User> existing = userRepository.findByDocumentNumber(payload.getDocumentNumber());
+        if (existing.isPresent()) {
+            throw new IllegalArgumentException("El usuario ya existe.");
+        }
+
+        // Guardar usuario
+        return userRepository.save(payload);
     }
 }

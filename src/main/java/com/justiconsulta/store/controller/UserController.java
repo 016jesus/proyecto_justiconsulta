@@ -32,6 +32,7 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /* implementacion de crear usuario
     @PostMapping
     public ResponseEntity<User> createUser(@Valid @RequestBody User user) {
         // Validación: no crear si ya existe
@@ -40,5 +41,5 @@ public class UserController {
         }
         User savedUser = userRepository.save(user);
         return ResponseEntity.status(201).body(savedUser);
-    }
+    }*/
 }
