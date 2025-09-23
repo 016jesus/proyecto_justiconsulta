@@ -1,6 +1,6 @@
 package com.justiconsulta.store.config;
 
-import com.justiconsulta.store.security.JwtTokenService;
+import com.justiconsulta.store.service.JwtTokenService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

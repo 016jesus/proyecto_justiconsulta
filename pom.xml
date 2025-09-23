@@ -101,6 +101,13 @@
             <artifactId>store</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
+
+        <!-- MailerSend Java SDK -->
+        <dependency>
+            <groupId>com.mailersend</groupId>
+            <artifactId>java-sdk</artifactId>
+            <version>1.4.1</version>
+        </dependency>
     </dependencies>
 
     <build>

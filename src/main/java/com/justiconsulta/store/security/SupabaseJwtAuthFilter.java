@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-@Component
+/*
 public class SupabaseJwtAuthFilter extends OncePerRequestFilter {
 
     private static final String AUTH_HEADER = "Authorization";
@@ -130,4 +130,6 @@ public class SupabaseJwtAuthFilter extends OncePerRequestFilter {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.getWriter().write(message);
     }
+
 }
+*/

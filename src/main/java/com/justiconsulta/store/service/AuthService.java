@@ -2,7 +2,6 @@ package com.justiconsulta.store.service;
 
 import com.justiconsulta.store.model.User;
 import com.justiconsulta.store.repository.UserRepository;
-import com.justiconsulta.store.security.JwtTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
