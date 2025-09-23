@@ -30,6 +30,7 @@ public class LegalProcessController {
     }
 
 
+
     @GetMapping("/{numeroRadicacion}")
     public ResponseEntity<?> getLegalProcess(
             @PathVariable String numeroRadicacion,
