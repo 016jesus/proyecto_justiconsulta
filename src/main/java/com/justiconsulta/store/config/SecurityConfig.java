@@ -1,6 +1,5 @@
 package com.justiconsulta.store.config;
 
-//import com.justiconsulta.store.security.SupabaseJwtAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -11,21 +10,18 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // Deshabilitar completamente la seguridad (solo para desarrollo)
         http
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health").permitAll()
-                .requestMatchers(
-                    "auth/register",
-                    "/auth/login",
-                    "/swagger-ui/**",
-                    "/swagger-ui.html",
-                    "/v3/api-docs/**",
-                    "/v3/api-docs.yaml"
-                ).permitAll()
-                .anyRequest().authenticated()
-            )
-            .httpBasic(Customizer.withDefaults());
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+            .sessionManagement(sm -> sm.disable())
+            .httpBasic(hb -> hb.disable())
+            .formLogin(fl -> fl.disable())
+            .logout(lo -> lo.disable())
+            .oauth2Login(oauth -> oauth.disable());
+
+        // Si tienes filtros custom como ApiKeyAuthFilter/JwtAuthFilter, evita registrarlos aquí.
 
         return http.build();
     }
