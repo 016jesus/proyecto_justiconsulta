@@ -53,6 +53,7 @@ public class LegalProcessController {
         if (document_number == null) {
             return ResponseEntity.badRequest().body("El usuario (document_number) es obligatorio.");
         }
+
         Optional<User> user = userRepository.findByDocumentNumber(document_number);
         if (user.isEmpty()) {
             return ResponseEntity.unprocessableEntity().body("Usuario no encontrado.");
