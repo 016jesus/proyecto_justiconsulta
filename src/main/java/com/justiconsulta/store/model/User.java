@@ -1,5 +1,6 @@
 package com.justiconsulta.store.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.OffsetDateTime;
@@ -30,6 +31,7 @@ public class User {
     @Column(name = "email", length = 255, unique = true, nullable = false)
     private String email;
 
+    @JsonIgnore
     @Column(name = "encrypted_password", nullable = false)
     private String encryptedPassword;
 
@@ -42,4 +44,3 @@ public class User {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 }
-

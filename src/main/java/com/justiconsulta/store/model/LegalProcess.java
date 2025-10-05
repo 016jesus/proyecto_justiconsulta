@@ -33,8 +33,8 @@ public class LegalProcess {
     @AllArgsConstructor
     public static class LegalProcessId implements Serializable {
 
-        @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
-        private UUID id;
+        @Column(name = "id", updatable = false, nullable = false)
+        private String id;
 
         @Column(name = "user_document_number", length = 50, nullable = false)
         private String userDocumentNumber;

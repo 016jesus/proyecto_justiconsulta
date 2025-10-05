@@ -37,10 +37,14 @@ public class AuthService {
         if (payload.getDocumentNumber() == null || payload.getDocumentNumber().isBlank()) {
             throw new IllegalArgumentException("documentNumber es obligatorio.");
         }
-        // Validar unicidad por documentNumber (ajusta si también validas por email/username)
+
         Optional<User> existing = userRepository.findByDocumentNumber(payload.getDocumentNumber());
         if (existing.isPresent()) {
             throw new IllegalArgumentException("El usuario ya existe.");
+        }
+        Optional<User> existingByEmail = userRepository.findByEmail(payload.getEmail());
+        if (existingByEmail.isPresent()) {
+            throw new IllegalArgumentException("El correo electronico: " + payload.getEmail() + " ya esta asociado a otro usuario.");
         }
 
 
