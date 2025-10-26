@@ -1,6 +1,7 @@
 package com.justiconsulta.store.service;
 
 import com.justiconsulta.store.dto.request.RegisterRequestDTO;
+import com.justiconsulta.store.exception.ResourceNotFoundException;
 import com.justiconsulta.store.model.User;
 import com.justiconsulta.store.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -77,5 +78,18 @@ public class AuthService {
         newUser.setSupabaseUserId(supabaseUserId);
 
         return userRepository.save(newUser);
+    }
+
+    // New: trigger password recovery flow via Supabase for existing users
+    public void sendPasswordRecovery(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required");
+        }
+        // verify user exists
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User with provided email not found"));
+
+        // Delegate to Supabase client
+        supabaseClient.sendPasswordRecovery(email);
     }
 }

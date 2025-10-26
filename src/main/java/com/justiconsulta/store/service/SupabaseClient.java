@@ -81,4 +81,40 @@ public class SupabaseClient {
             throw new RuntimeException("Supabase API error: " + e.getStatusCode() + " " + e.getResponseBodyAsString());
         }
     }
+
+    // New: trigger password recovery email via Supabase public recover endpoint
+    public void sendPasswordRecovery(String email) {
+        if (supabaseUrl == null || supabaseUrl.isEmpty()) {
+            throw new IllegalStateException("Supabase URL is not configured. Cannot send recovery email.");
+        }
+
+        String url = supabaseUrl;
+        if (url.endsWith("/")) url = url.substring(0, url.length() - 1);
+        url = url + "/auth/v1/recover";
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("email", email);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        // for recover endpoint Supabase expects an apikey header (anon or service role). We'll add serviceRoleKey if available
+        if (serviceRoleKey != null && !serviceRoleKey.isEmpty()) {
+            headers.add("apikey", serviceRoleKey);
+            headers.setBearerAuth(serviceRoleKey);
+        }
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<Map> resp = restTemplate.postForEntity(url, request, Map.class);
+            if (!resp.getStatusCode().is2xxSuccessful()) {
+                throw new RuntimeException("Supabase recover request failed: " + resp.getStatusCode());
+            }
+            log.info("Supabase recover request accepted for email={}", email);
+        } catch (HttpClientErrorException e) {
+            // If Supabase returns 400/404, surface a clear message
+            throw new RuntimeException("Supabase recover API error: " + e.getStatusCode() + " " + e.getResponseBodyAsString());
+        }
+    }
+
 }
