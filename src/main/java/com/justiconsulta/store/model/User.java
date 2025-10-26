@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "\"user\"")
@@ -34,6 +35,10 @@ public class User {
     @JsonIgnore
     @Column(name = "encrypted_password", nullable = false)
     private String encryptedPassword;
+
+    // Store the Supabase user id as UUID to match the DB column type (uuid)
+    @Column(name = "supabase_user_id", columnDefinition = "uuid", unique = true)
+    private UUID supabaseUserId;
 
     @Column(name = "birth_date")
     private java.sql.Date birthDate;

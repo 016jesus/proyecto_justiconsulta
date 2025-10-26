@@ -7,12 +7,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
     private final JwtTokenService jwtTokenService;
+    private final SupabaseClient supabaseClient;
 
     public String login(String email, String rawPassword) {
         if (rawPassword == null || rawPassword.isEmpty()) {
@@ -38,6 +43,20 @@ public class AuthService {
             throw new IllegalArgumentException("El correo electrónico ya está registrado.");
         }
 
+        // Prepare metadata to send to Supabase
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("document_number", payload.documentNumber());
+        metadata.put("document_type", payload.documentType());
+        metadata.put("first_name", payload.firstName());
+        metadata.put("middle_name", payload.middleName());
+        metadata.put("first_last_name", payload.firstLastName());
+        metadata.put("second_last_name", payload.secondLastName());
+
+        // Create user in Supabase (admin API). This will return the supabase user id as UUID
+        UUID supabaseUserId = supabaseClient.createUser(payload.email(), payload.password(), metadata);
+
+        // Hash password locally for backward compatibility (optional). If you want to fully delegate auth to Supabase,
+        // consider setting encryptedPassword to null and update login flow accordingly.
         String rawPassword = payload.password();
         String hashed = BCrypt.hashpw(rawPassword, BCrypt.gensalt(12));
 
@@ -51,10 +70,11 @@ public class AuthService {
         newUser.setDocumentNumber(payload.documentNumber());
         newUser.setFirstName(payload.firstName());
         newUser.setMiddleName(payload.middleName());
-        newUser.setFirstLastName(payload.firstLastName()); // <-- ¡Corregido!
+        newUser.setFirstLastName(payload.firstLastName());
         newUser.setSecondLastName(payload.secondLastName());
         newUser.setEmail(payload.email());
         newUser.setEncryptedPassword(hashed);
+        newUser.setSupabaseUserId(supabaseUserId);
 
         return userRepository.save(newUser);
     }

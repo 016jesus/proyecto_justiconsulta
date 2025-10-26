@@ -48,6 +48,17 @@
         </dependency>
 
         <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>10.5</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+            <version>4.0.0-M3</version>
+        </dependency>
+        <dependency>
             <artifactId>spring-boot-devtools</artifactId>
             <groupId>org.springframework.boot</groupId>
             <optional>true</optional>
