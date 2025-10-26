@@ -1,12 +1,11 @@
 package com.justiconsulta.store.service;
 
+import com.justiconsulta.store.dto.request.RegisterRequestDTO;
 import com.justiconsulta.store.model.User;
 import com.justiconsulta.store.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,39 +22,40 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Credenciales inválidas"));
 
         if (user.getEncryptedPassword() == null || !BCrypt.checkpw(rawPassword, user.getEncryptedPassword())) {
-            throw new IllegalArgumentException("Credenciales invalidad");
+            throw new IllegalArgumentException("Credenciales inválidas");
         }
 
         return jwtTokenService.generate(user.getDocumentNumber(), user.getEmail());
     }
 
 
-    public Object register(User payload) {
-        if (payload == null) {
-            throw new IllegalArgumentException("Payload requerido.");
+    public Object register(RegisterRequestDTO payload) {
+
+        if (userRepository.findByDocumentNumber(payload.documentNumber()).isPresent()) {
+            throw new IllegalArgumentException("El número de documento ya está registrado.");
         }
-        if (payload.getDocumentNumber() == null || payload.getDocumentNumber().isBlank()) {
-            throw new IllegalArgumentException("documentNumber es obligatorio.");
+        if (userRepository.findByEmail(payload.email()).isPresent()) {
+            throw new IllegalArgumentException("El correo electrónico ya está registrado.");
         }
 
-        Optional<User> existing = userRepository.findByDocumentNumber(payload.getDocumentNumber());
-        if (existing.isPresent()) {
-            throw new IllegalArgumentException("El usuario ya existe.");
-        }
-        Optional<User> existingByEmail = userRepository.findByEmail(payload.getEmail());
-        if (existingByEmail.isPresent()) {
-            throw new IllegalArgumentException("El correo electronico: " + payload.getEmail() + " ya esta asociado a otro usuario.");
-        }
-
-
-        String rawPassword = payload.getEncryptedPassword();
-        if (rawPassword == null || rawPassword.isBlank()) {
-            throw new IllegalArgumentException("password es obligatorio.");
-        }
+        String rawPassword = payload.password();
         String hashed = BCrypt.hashpw(rawPassword, BCrypt.gensalt(12));
-        payload.setEncryptedPassword(hashed);
 
-        // Guardar usuario
-        return userRepository.save(payload);
+        User newUser = new User();
+
+        newUser.setDocumentType(payload.documentType());
+        if (payload.birthDate() != null && !payload.birthDate().isEmpty()) {
+            newUser.setBirthDate(java.sql.Date.valueOf(payload.birthDate())); // Convertimos String a java.sql.Date
+        }
+
+        newUser.setDocumentNumber(payload.documentNumber());
+        newUser.setFirstName(payload.firstName());
+        newUser.setMiddleName(payload.middleName());
+        newUser.setFirstLastName(payload.firstLastName()); // <-- ¡Corregido!
+        newUser.setSecondLastName(payload.secondLastName());
+        newUser.setEmail(payload.email());
+        newUser.setEncryptedPassword(hashed);
+
+        return userRepository.save(newUser);
     }
 }

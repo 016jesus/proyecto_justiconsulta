@@ -23,7 +23,7 @@ public class User {
     private String middleName;
 
     @Column(name = "last_name", length = 120, nullable = false)
-    private String lastName;
+    private String firstLastName;
 
     @Column(name = "second_last_name", length = 120)
     private String secondLastName;
