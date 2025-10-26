@@ -12,6 +12,8 @@ import com.justiconsulta.store.repository.UserRepository;
 import com.justiconsulta.store.service.ApiClient;
 import lombok.Data;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
@@ -53,13 +55,40 @@ public class LegalProcessController {
 
         ResponseEntity<String> response = apiClient.getByNumeroRadicacion(numeroRadicacion, queryParams);
 
-        // Registrar historial si se proporcionó un usuario
-        if (documentNumberHeader != null && !documentNumberHeader.isBlank()) {
-            // sólo registrar si el usuario existe
-            Optional<User> userOpt = userRepository.findByDocumentNumber(documentNumberHeader);
+        // Resolver usuario autenticado desde SecurityContext (si el filtro JWT puso Authentication)
+        String resolvedDocumentNumber = null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() != null) {
+            String principal = auth.getName(); // el filtro deja sub (supabase UUID) o email como nombre
+            if (principal != null && !principal.isBlank()) {
+                // intentar interpretar como UUID (supabase user id)
+                try {
+                    java.util.UUID supabaseId = java.util.UUID.fromString(principal);
+                    Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
+                    if (u.isPresent()) {
+                        resolvedDocumentNumber = u.get().getDocumentNumber();
+                    }
+                } catch (IllegalArgumentException ex) {
+                    // no es UUID; intentar por email
+                    Optional<User> u2 = userRepository.findByEmail(principal);
+                    if (u2.isPresent()) {
+                        resolvedDocumentNumber = u2.get().getDocumentNumber();
+                    }
+                }
+            }
+        }
+
+        // fallback al header X-Document-Number si no hay usuario autenticado
+        if (resolvedDocumentNumber == null && documentNumberHeader != null && !documentNumberHeader.isBlank()) {
+            resolvedDocumentNumber = documentNumberHeader;
+        }
+
+        // Registrar historial si resolvimos un usuario
+        if (resolvedDocumentNumber != null) {
+            Optional<User> userOpt = userRepository.findByDocumentNumber(resolvedDocumentNumber);
             if (userOpt.isPresent()) {
                 History history = new History();
-                history.setUserDocumentNumber(documentNumberHeader);
+                history.setUserDocumentNumber(resolvedDocumentNumber);
                 history.setLegalProcessId(numeroRadicacion);
                 history.setActivitySeriesId(null);
                 history.setDate(OffsetDateTime.now());
