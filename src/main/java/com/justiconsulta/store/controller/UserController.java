@@ -7,9 +7,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
-import java.util.UUID;
 
 import com.justiconsulta.store.repository.UserLegalProcessRepository;
+import com.justiconsulta.store.dto.request.DocumentNumberRequest;
+import com.justiconsulta.store.dto.request.EmailRequest;
+
 
 @RestController
 @RequestMapping("/api/users")
@@ -23,29 +25,22 @@ public class UserController {
         this.userLegalProcessRepository = userLegalProcessRepository;
     }
 
-    // Nuevo endpoint: buscar usuario por documentNumber en el body
     @PostMapping("/by-document")
     public ResponseEntity<User> getUserByDocument(@Valid @RequestBody DocumentNumberRequest request) {
-        if (request.getDocumentNumber() == null || request.getDocumentNumber().isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
         return userRepository.findById(request.getDocumentNumber())
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // DTO para recibir el documentNumber en el body
-    public static class DocumentNumberRequest {
-        private String documentNumber;
-        public String getDocumentNumber() { return documentNumber; }
-        public void setDocumentNumber(String documentNumber) { this.documentNumber = documentNumber; }
+    @PostMapping("/by-email")
+    public ResponseEntity<User> getUserByEmail(@Valid @RequestBody EmailRequest request) {
+        return userRepository.findByEmail(request.getEmail())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/legal-process-ids")
     public ResponseEntity<List<String>> getLegalProcessIdsByUser(@Valid @RequestBody DocumentNumberRequest request) {
-        if (request.getDocumentNumber() == null || request.getDocumentNumber().isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
         List<String> processIds = userLegalProcessRepository.findProcessIdsByUserDocumentNumber(request.getDocumentNumber());
         return ResponseEntity.ok(processIds);
     }
