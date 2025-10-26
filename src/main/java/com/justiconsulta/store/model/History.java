@@ -15,9 +15,9 @@ public class History {
     @Column(columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
-    // Reemplazar relaciones por campos escalares UUID (sin FK)
-    @Column(name = "legal_process_id", columnDefinition = "uuid")
-    private UUID legalProcessId;
+    // legal process id stored as string (se cambió en la BD)
+    @Column(name = "legal_process_id")
+    private String legalProcessId;
 
     @Column(name = "activity_series_id", columnDefinition = "uuid")
     private UUID activitySeriesId;
@@ -30,4 +30,8 @@ public class History {
 
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
+
+    // user_document_number stored as TEXT in DB
+    @Column(name = "user_document_number", columnDefinition = "text")
+    private String userDocumentNumber;
 }

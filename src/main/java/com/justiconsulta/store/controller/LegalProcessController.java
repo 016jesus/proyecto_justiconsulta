@@ -1,13 +1,16 @@
 package com.justiconsulta.store.controller;
 
+import com.justiconsulta.store.model.History;
 import com.justiconsulta.store.model.LegalProcess;
 import com.justiconsulta.store.model.User;
 import com.justiconsulta.store.model.UserLegalProcess;
 import com.justiconsulta.store.model.UserLegalProcess.UserLegalProcessId;
+import com.justiconsulta.store.repository.HistoryRepository;
 import com.justiconsulta.store.repository.LegalProcessRepository;
 import com.justiconsulta.store.repository.UserLegalProcessRepository;
 import com.justiconsulta.store.repository.UserRepository;
 import com.justiconsulta.store.service.ApiClient;
+import lombok.Data;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,12 +24,14 @@ public class LegalProcessController {
     private final ApiClient apiClient;
     private final UserRepository userRepository;
     private final UserLegalProcessRepository userLegalProcessRepository;
+    private final HistoryRepository historyRepository;
 
-    public LegalProcessController(LegalProcessRepository legalProcessRepository, ApiClient apiClient, UserRepository userRepository, UserLegalProcessRepository userLegalProcessRepository) {
+    public LegalProcessController(LegalProcessRepository legalProcessRepository, ApiClient apiClient, UserRepository userRepository, UserLegalProcessRepository userLegalProcessRepository, HistoryRepository historyRepository) {
         this.legalProcessRepository = legalProcessRepository;
         this.apiClient = apiClient;
         this.userRepository = userRepository;
         this.userLegalProcessRepository = userLegalProcessRepository;
+        this.historyRepository = historyRepository;
     }
 
     @GetMapping
@@ -34,31 +39,55 @@ public class LegalProcessController {
         return legalProcessRepository.findAll();
     }
 
-
-
     @GetMapping("/{numeroRadicacion}")
     public ResponseEntity<?> getLegalProcess(
             @PathVariable String numeroRadicacion,
-            @RequestParam(name = "SoloActivos", required = true, defaultValue = "false") boolean soloActivos,
-            @RequestParam(name = "pagina", required = false, defaultValue = "1") int pagina) {
+            @RequestParam(name = "SoloActivos", required = false, defaultValue = "false") boolean soloActivos,
+            @RequestParam(name = "pagina", required = false, defaultValue = "1") int pagina,
+            @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
+    ) {
 
         Map<String, String> queryParams = new HashMap<>();
         queryParams.put("SoloActivos", String.valueOf(soloActivos));
         queryParams.put("pagina", String.valueOf(pagina));
 
         ResponseEntity<String> response = apiClient.getByNumeroRadicacion(numeroRadicacion, queryParams);
-        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+
+        // Registrar historial si se proporcionó un usuario
+        if (documentNumberHeader != null && !documentNumberHeader.isBlank()) {
+            // sólo registrar si el usuario existe
+            Optional<User> userOpt = userRepository.findByDocumentNumber(documentNumberHeader);
+            if (userOpt.isPresent()) {
+                History history = new History();
+                history.setUserDocumentNumber(documentNumberHeader);
+                history.setLegalProcessId(numeroRadicacion);
+                history.setActivitySeriesId(null);
+                history.setDate(OffsetDateTime.now());
+                if (response != null && response.getBody() != null) {
+                    // acotar el tamaño del resultado para evitar textos demasiado grandes
+                    String body = response.getBody();
+                    history.setResult(body.length() > 2000 ? body.substring(0, 2000) : body);
+                } else if (response != null) {
+                    history.setResult("HTTP " + response.getStatusCodeValue());
+                } else {
+                    history.setResult("No response from external API");
+                }
+                history.setCreatedAt(OffsetDateTime.now());
+                historyRepository.save(history);
+            }
+        }
+
+        if (response != null && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
             return ResponseEntity.ok(response.getBody());
         } else {
             return ResponseEntity.notFound().build();
         }
     }
-    
+
     // DTO para asociar proceso a usuario
+    @Data
     public static class AssociateProcessRequest {
         private String documentNumber;
-        public String getDocumentNumber() { return documentNumber; }
-        public void setDocumentNumber(String documentNumber) { this.documentNumber = documentNumber; }
     }
 
     @PostMapping("/{numeroRadicacion}")
@@ -87,22 +116,16 @@ public class LegalProcessController {
         return ResponseEntity.ok("Asociación creada correctamente.");
     }
 
-    private ResponseEntity<?> createAndPersistLegalProcess(LegalProcess legalProcess) {
-        if (legalProcess.getId() == null || legalProcess.getId().getId() == null || legalProcess.getId().getUserDocumentNumber() == null) {
-            return ResponseEntity.badRequest().body("El id compuesto (id y user_document_number) es obligatorio.");
+    @GetMapping("/history")
+    public ResponseEntity<?> getUserHistory(@RequestHeader(value = "X-Document-Number") String documentNumber) {
+        if (documentNumber == null || documentNumber.isBlank()) {
+            return ResponseEntity.badRequest().body("X-Document-Number header is required.");
         }
-        // Verificar existencia por PK compuesta
-        if (legalProcessRepository.existsById(legalProcess.getId())) {
-            return ResponseEntity.unprocessableEntity().body("El id ya existe.");
+        Optional<User> user = userRepository.findByDocumentNumber(documentNumber);
+        if (user.isEmpty()) {
+            return ResponseEntity.notFound().build();
         }
-        boolean valido = apiClient.validateId(legalProcess.getId().getId());
-        if (!valido) {
-            return ResponseEntity.unprocessableEntity().body("El id no es válido según ApiClient.");
-        }
-        if (legalProcess.getCreatedAt() == null) {
-            legalProcess.setCreatedAt(OffsetDateTime.now());
-        }
-        LegalProcess saved = legalProcessRepository.save(legalProcess);
-        return ResponseEntity.ok(saved);
+        List<History> history = historyRepository.findByUserDocumentNumberOrderByDateDesc(documentNumber);
+        return ResponseEntity.ok(history);
     }
 }
