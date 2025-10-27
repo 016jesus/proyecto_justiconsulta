@@ -11,6 +11,7 @@ import com.justiconsulta.store.repository.UserLegalProcessRepository;
 import com.justiconsulta.store.repository.UserRepository;
 import com.justiconsulta.store.service.ApiClient;
 import lombok.Data;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -97,7 +98,7 @@ public class LegalProcessController {
                     String body = response.getBody();
                     history.setResult(body.length() > 2000 ? body.substring(0, 2000) : body);
                 } else if (response != null) {
-                    history.setResult("HTTP " + response.getStatusCodeValue());
+                    history.setResult("HTTP " + response.getStatusCode().value());
                 } else {
                     history.setResult("No response from external API");
                 }
@@ -106,11 +107,82 @@ public class LegalProcessController {
             }
         }
 
-        if (response != null && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-            return ResponseEntity.ok(response.getBody());
-        } else {
-            return ResponseEntity.notFound().build();
+        // Propagate external response properly
+        if (response == null) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", "No response from external API"));
         }
+        if (response.getStatusCode().is2xxSuccessful()) {
+            if (response.getBody() != null) {
+                return ResponseEntity.ok(response.getBody());
+            }
+            return ResponseEntity.ok(Map.of("message", "No content from external API"));
+        }
+        return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
+    }
+
+    // New endpoint: detalle del proceso por idProceso
+    @GetMapping("/detail/{idProceso}")
+    public ResponseEntity<?> getProcessDetail(
+            @PathVariable String idProceso,
+            @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
+    ) {
+        ResponseEntity<String> response = apiClient.getProcessDetail(idProceso);
+
+        // Resolver usuario autenticado (mismo flujo que en getLegalProcess)
+        String resolvedDocumentNumber = null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() != null) {
+            String principal = auth.getName();
+            if (principal != null && !principal.isBlank()) {
+                try {
+                    java.util.UUID supabaseId = java.util.UUID.fromString(principal);
+                    Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
+                    if (u.isPresent()) {
+                        resolvedDocumentNumber = u.get().getDocumentNumber();
+                    }
+                } catch (IllegalArgumentException ex) {
+                    Optional<User> u2 = userRepository.findByEmail(principal);
+                    if (u2.isPresent()) {
+                        resolvedDocumentNumber = u2.get().getDocumentNumber();
+                    }
+                }
+            }
+        }
+
+        if (resolvedDocumentNumber == null && documentNumberHeader != null && !documentNumberHeader.isBlank()) {
+            resolvedDocumentNumber = documentNumberHeader;
+        }
+
+        if (resolvedDocumentNumber != null) {
+            Optional<User> userOpt = userRepository.findByDocumentNumber(resolvedDocumentNumber);
+            if (userOpt.isPresent()) {
+                History history = new History();
+                history.setUserDocumentNumber(resolvedDocumentNumber);
+                history.setLegalProcessId(idProceso);
+                history.setActivitySeriesId(null);
+                history.setDate(OffsetDateTime.now());
+                if (response != null && response.getBody() != null) {
+                    String body = response.getBody();
+                    history.setResult(body.length() > 2000 ? body.substring(0, 2000) : body);
+                } else if (response != null) {
+                    history.setResult("HTTP " + response.getStatusCode().value());
+                } else {
+                    history.setResult("No response from external API");
+                }
+                history.setCreatedAt(OffsetDateTime.now());
+                historyRepository.save(history);
+            }
+        }
+
+        // Propagate response
+        if (response == null) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", "No response from external API"));
+        }
+        if (response.getStatusCode().is2xxSuccessful()) {
+            if (response.getBody() != null) return ResponseEntity.ok(response.getBody());
+            return ResponseEntity.ok(Map.of("message", "No content from external API"));
+        }
+        return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
     }
 
     // DTO para asociar proceso a usuario
@@ -156,5 +228,126 @@ public class LegalProcessController {
         }
         List<History> history = historyRepository.findByUserDocumentNumberOrderByDateDesc(documentNumber);
         return ResponseEntity.ok(history);
+    }
+
+    // New endpoint: subjects for a process
+    @GetMapping("/{idProceso}/subjects")
+    public ResponseEntity<?> getProcessSubjects(
+            @PathVariable String idProceso,
+            @RequestParam(name = "pagina", required = false, defaultValue = "1") int pagina,
+            @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
+    ) {
+        ResponseEntity<String> response = apiClient.getProcessSubjects(idProceso, pagina);
+
+        // resolve user same as other methods
+        String resolvedDocumentNumber = null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() != null) {
+            String principal = auth.getName();
+            if (principal != null && !principal.isBlank()) {
+                try {
+                    java.util.UUID supabaseId = java.util.UUID.fromString(principal);
+                    Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
+                    if (u.isPresent()) resolvedDocumentNumber = u.get().getDocumentNumber();
+                } catch (IllegalArgumentException ex) {
+                    Optional<User> u2 = userRepository.findByEmail(principal);
+                    if (u2.isPresent()) resolvedDocumentNumber = u2.get().getDocumentNumber();
+                }
+            }
+        }
+        if (resolvedDocumentNumber == null && documentNumberHeader != null && !documentNumberHeader.isBlank()) {
+            resolvedDocumentNumber = documentNumberHeader;
+        }
+
+        if (resolvedDocumentNumber != null) {
+            Optional<User> userOpt = userRepository.findByDocumentNumber(resolvedDocumentNumber);
+            if (userOpt.isPresent()) {
+                History history = new History();
+                history.setUserDocumentNumber(resolvedDocumentNumber);
+                history.setLegalProcessId(idProceso);
+                history.setActivitySeriesId(null);
+                history.setDate(OffsetDateTime.now());
+                if (response != null && response.getBody() != null && !response.getBody().isBlank()) {
+                    String body = response.getBody();
+                    history.setResult(body.length() > 2000 ? body.substring(0, 2000) : body);
+                } else if (response != null) {
+                    history.setResult("HTTP " + response.getStatusCode().value());
+                } else {
+                    history.setResult("No response from external API");
+                }
+                history.setCreatedAt(OffsetDateTime.now());
+                historyRepository.save(history);
+            }
+        }
+
+        // Propagate external response
+        if (response == null) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", "No response from external API"));
+        }
+        if (response.getStatusCode().is2xxSuccessful()) {
+            if (response.getBody() != null && !response.getBody().isBlank()) return ResponseEntity.ok(response.getBody());
+            return ResponseEntity.ok(Map.of("message", "No subjects associated with this process"));
+        }
+        return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
+    }
+
+    // New endpoint: documents for a process
+    @GetMapping("/{idProceso}/documents")
+    public ResponseEntity<?> getProcessDocuments(
+            @PathVariable String idProceso,
+            @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
+    ) {
+        ResponseEntity<String> response = apiClient.getProcessDocuments(idProceso);
+
+        // resolve user
+        String resolvedDocumentNumber = null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() != null) {
+            String principal = auth.getName();
+            if (principal != null && !principal.isBlank()) {
+                try {
+                    java.util.UUID supabaseId = java.util.UUID.fromString(principal);
+                    Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
+                    if (u.isPresent()) resolvedDocumentNumber = u.get().getDocumentNumber();
+                } catch (IllegalArgumentException ex) {
+                    Optional<User> u2 = userRepository.findByEmail(principal);
+                    if (u2.isPresent()) resolvedDocumentNumber = u2.get().getDocumentNumber();
+                }
+            }
+        }
+        if (resolvedDocumentNumber == null && documentNumberHeader != null && !documentNumberHeader.isBlank()) {
+            resolvedDocumentNumber = documentNumberHeader;
+        }
+
+        if (resolvedDocumentNumber != null) {
+            Optional<User> userOpt = userRepository.findByDocumentNumber(resolvedDocumentNumber);
+            if (userOpt.isPresent()) {
+                History history = new History();
+                history.setUserDocumentNumber(resolvedDocumentNumber);
+                history.setLegalProcessId(idProceso);
+                history.setActivitySeriesId(null);
+                history.setDate(OffsetDateTime.now());
+                if (response != null && response.getBody() != null && !response.getBody().isBlank()) {
+                    String body = response.getBody();
+                    history.setResult(body.length() > 2000 ? body.substring(0, 2000) : body);
+                } else if (response != null) {
+                    history.setResult("HTTP " + response.getStatusCode().value());
+                } else {
+                    history.setResult("No response from external API");
+                }
+                history.setCreatedAt(OffsetDateTime.now());
+                historyRepository.save(history);
+            }
+        }
+
+        // Propagate external response
+        if (response == null) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", "No response from external API"));
+        }
+        if (response.getStatusCode().is2xxSuccessful()) {
+            if (response.getBody() != null && !response.getBody().isBlank()) return ResponseEntity.ok(response.getBody());
+            return ResponseEntity.ok(Map.of("message", "El proceso no tiene documentos asociados"));
+        }
+        return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
     }
 }
