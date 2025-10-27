@@ -35,11 +35,13 @@ public class AuthController {
         return new ResponseEntity<>(savedUser, HttpStatus.CREATED);
     }
 
-
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.sendPasswordRecovery(request.getEmail().trim());
-        return ResponseEntity.accepted().build();
+    public ResponseEntity<EmailResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        String email = request.getEmail().trim();
+        authService.sendPasswordRecovery(email);
+        EmailResponse resp = new EmailResponse();
+        resp.setEmail(email);
+        return ResponseEntity.accepted().body(resp);
     }
 
     @Data
@@ -58,6 +60,11 @@ public class AuthController {
     @Data
     public static class ResetPasswordRequest {
         @NotBlank @Email
+        private String email;
+    }
+
+    @Data
+    public static class EmailResponse {
         private String email;
     }
 }
