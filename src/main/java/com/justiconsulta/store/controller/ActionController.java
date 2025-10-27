@@ -40,13 +40,6 @@ public class ActionController {
         return actionRepository.findAll();
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Action> getAction(@PathVariable String id) {
-        return actionRepository.findById(UUID.fromString(id))
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
     // Endpoint para crear una acción y notificar
     @PostMapping("/legal-process/{legalProcessId}")
     public Action createActionAndNotify(@PathVariable UUID legalProcessId, @RequestBody String description) {
