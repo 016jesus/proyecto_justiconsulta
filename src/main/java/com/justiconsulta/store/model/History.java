@@ -16,7 +16,7 @@ public class History {
     private UUID id;
 
     // legal process id stored as string (se cambió en la BD)
-    @Column(name = "legal_process_id")
+    @Column(name = "legal_process_id", columnDefinition = "text")
     private String legalProcessId;
 
     @Column(name = "activity_series_id", columnDefinition = "uuid")
@@ -25,7 +25,8 @@ public class History {
     @Column(name = "date", nullable = false)
     private OffsetDateTime date;
 
-    @Column(name = "result")
+    // result can be large (JSON body or error text) -> use text column to avoid varchar(255) limit
+    @Column(name = "result", columnDefinition = "text")
     private String result;
 
     @Column(name = "created_at")

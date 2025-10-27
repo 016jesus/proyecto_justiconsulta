@@ -11,6 +11,8 @@ import com.justiconsulta.store.repository.UserLegalProcessRepository;
 import com.justiconsulta.store.repository.UserRepository;
 import com.justiconsulta.store.service.ApiClient;
 import lombok.Data;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -23,6 +25,8 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/legal-processes")
 public class LegalProcessController {
+    private static final Logger log = LoggerFactory.getLogger(LegalProcessController.class);
+
     private final LegalProcessRepository legalProcessRepository;
     private final ApiClient apiClient;
     private final UserRepository userRepository;
@@ -103,7 +107,11 @@ public class LegalProcessController {
                     history.setResult("No response from external API");
                 }
                 history.setCreatedAt(OffsetDateTime.now());
-                historyRepository.save(history);
+                try {
+                    historyRepository.save(history);
+                } catch (Exception e) {
+                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, numeroRadicacion, e.getMessage());
+                }
             }
         }
 
@@ -120,7 +128,6 @@ public class LegalProcessController {
         return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
     }
 
-    // New endpoint: detalle del proceso por idProceso
     @GetMapping("/detail/{idProceso}")
     public ResponseEntity<?> getProcessDetail(
             @PathVariable String idProceso,
@@ -128,7 +135,7 @@ public class LegalProcessController {
     ) {
         ResponseEntity<String> response = apiClient.getProcessDetail(idProceso);
 
-        // Resolver usuario autenticado (mismo flujo que en getLegalProcess)
+
         String resolvedDocumentNumber = null;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && auth.getPrincipal() != null) {
@@ -170,7 +177,11 @@ public class LegalProcessController {
                     history.setResult("No response from external API");
                 }
                 history.setCreatedAt(OffsetDateTime.now());
-                historyRepository.save(history);
+                try {
+                    historyRepository.save(history);
+                } catch (Exception e) {
+                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, idProceso, e.getMessage());
+                }
             }
         }
 
@@ -185,7 +196,7 @@ public class LegalProcessController {
         return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
     }
 
-    // DTO para asociar proceso a usuario
+
     @Data
     public static class AssociateProcessRequest {
         private String documentNumber;
@@ -276,7 +287,11 @@ public class LegalProcessController {
                     history.setResult("No response from external API");
                 }
                 history.setCreatedAt(OffsetDateTime.now());
-                historyRepository.save(history);
+                try {
+                    historyRepository.save(history);
+                } catch (Exception e) {
+                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, idProceso, e.getMessage());
+                }
             }
         }
 
@@ -336,7 +351,11 @@ public class LegalProcessController {
                     history.setResult("No response from external API");
                 }
                 history.setCreatedAt(OffsetDateTime.now());
-                historyRepository.save(history);
+                try {
+                    historyRepository.save(history);
+                } catch (Exception e) {
+                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, idProceso, e.getMessage());
+                }
             }
         }
 
