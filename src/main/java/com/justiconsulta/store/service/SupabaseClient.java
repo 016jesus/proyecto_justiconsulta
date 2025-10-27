@@ -117,4 +117,43 @@ public class SupabaseClient {
         }
     }
 
+    // Update current user password using an access token (from recovery link) via Supabase Auth API
+    public void updatePasswordWithAccessToken(String accessToken, String newPassword) {
+        if (supabaseUrl == null || supabaseUrl.isEmpty()) {
+            throw new IllegalStateException("Supabase URL is not configured. Cannot update password.");
+        }
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("Missing access token");
+        }
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new IllegalArgumentException("Password is required");
+        }
+
+        String url = supabaseUrl;
+        if (url.endsWith("/")) url = url.substring(0, url.length() - 1);
+        url = url + "/auth/v1/user";
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("password", newPassword);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+        // apikey header is generally required; use service role if available
+        if (serviceRoleKey != null && !serviceRoleKey.isEmpty()) {
+            headers.add("apikey", serviceRoleKey);
+        }
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+        try {
+            // GoTrue typically accepts PUT/PATCH; use PUT here
+            ResponseEntity<Map> resp = restTemplate.exchange(url, HttpMethod.PUT, request, Map.class);
+            if (!resp.getStatusCode().is2xxSuccessful()) {
+                throw new RuntimeException("Supabase update password failed: " + resp.getStatusCode());
+            }
+        } catch (HttpClientErrorException e) {
+            // 401 when token invalid/expired; 400 for malformed
+            throw new IllegalArgumentException("Access token inválido o expirado: " + e.getStatusCode());
+        }
+    }
 }

@@ -197,7 +197,7 @@ public class TokenValidator {
         } catch (Exception e) {
             logger.warn("Signature verification failed, will try refresh if not forced", e);
             if (!forceRefresh) {
-                // caller will attempt with forceRefresh=true
+
                 return false;
             }
             return false;

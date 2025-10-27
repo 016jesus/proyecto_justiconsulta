@@ -17,4 +17,6 @@ public interface LegalProcessRepository extends JpaRepository<LegalProcess, UUID
     boolean existsById(LegalProcess.LegalProcessId id);
 
     Optional<LegalProcess> findById(LegalProcess.LegalProcessId legalProcessId);
+
+    List<LegalProcess> findByIdUserDocumentNumber(String userDocumentNumber);
 }

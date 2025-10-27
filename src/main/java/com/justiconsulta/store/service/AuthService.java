@@ -4,12 +4,15 @@ import com.justiconsulta.store.dto.request.RegisterRequestDTO;
 import com.justiconsulta.store.exception.ResourceNotFoundException;
 import com.justiconsulta.store.model.User;
 import com.justiconsulta.store.repository.UserRepository;
+import com.justiconsulta.store.security.TokenValidationResult;
+import com.justiconsulta.store.security.TokenValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -19,6 +22,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtTokenService jwtTokenService;
     private final SupabaseClient supabaseClient;
+    private final TokenValidator tokenValidator;
 
     public String login(String email, String rawPassword) {
         if (rawPassword == null || rawPassword.isEmpty()) {
@@ -91,5 +95,41 @@ public class AuthService {
 
         // Delegate to Supabase client
         supabaseClient.sendPasswordRecovery(email);
+    }
+
+    // New: update password using Supabase access token; also sync local encrypted password
+    public void updatePasswordFromAccessToken(String accessToken, String newPassword) {
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new IllegalArgumentException("La contraseña es requerida");
+        }
+        if (newPassword.length() < 8) {
+            throw new IllegalArgumentException("La contraseña debe tener al menos 8 caracteres");
+        }
+        // Validate token and get principal (email or supabase user id)
+        TokenValidationResult result = tokenValidator.validate(accessToken);
+        if (result == null || !result.isValid() || result.getPrincipal() == null || result.getPrincipal().isBlank()) {
+            throw new IllegalArgumentException("Token inválido o expirado");
+        }
+        String principal = result.getPrincipal();
+
+        // Update password in Supabase using the access token
+        supabaseClient.updatePasswordWithAccessToken(accessToken, newPassword);
+
+        // Update password locally (if user exists)
+        Optional<User> userOpt;
+        try {
+            UUID supabaseId = UUID.fromString(principal);
+            userOpt = userRepository.findBySupabaseUserId(supabaseId);
+        } catch (IllegalArgumentException ex) {
+            userOpt = userRepository.findByEmail(principal);
+        }
+
+        if (userOpt.isPresent()) {
+            User u = userOpt.get();
+            String hashed = BCrypt.hashpw(newPassword, BCrypt.gensalt(12));
+            u.setEncryptedPassword(hashed);
+            userRepository.save(u);
+        }
+        // If not present locally, we silently ignore to avoid leaking info. Supabase update already succeeded.
     }
 }

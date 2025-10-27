@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,6 +45,18 @@ public class AuthController {
         return ResponseEntity.accepted().body(resp);
     }
 
+    // Nuevo endpoint: actualiza la contraseña usando access_token (Bearer) de Supabase
+    @PostMapping(value = "/update-password", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> updatePassword(@Valid @RequestBody UpdatePasswordRequest request,
+                                            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Falta token Bearer en Authorization");
+        }
+        String accessToken = authorization.substring(7);
+        authService.updatePasswordFromAccessToken(accessToken, request.getPassword());
+        return ResponseEntity.noContent().build();
+    }
+
     @Data
     public static class LoginRequest {
         @NotBlank @Email
@@ -66,5 +79,11 @@ public class AuthController {
     @Data
     public static class EmailResponse {
         private String email;
+    }
+
+    @Data
+    public static class UpdatePasswordRequest {
+        @NotBlank
+        private String password;
     }
 }
