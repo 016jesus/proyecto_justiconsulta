@@ -2,6 +2,7 @@ package com.justiconsulta.store.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.justiconsulta.store.dto.response.HistoryResponseDto;
 import com.justiconsulta.store.dto.response.LegalProcessResponseDto;
 import com.justiconsulta.store.model.History;
 import com.justiconsulta.store.model.LegalProcess;
@@ -175,6 +176,101 @@ public class LegalProcessController {
                         p.getLastActionDate(),
                         p.getCreatedAt()
                 ))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
+    }
+    // Removed request body; ahora se obtiene el documentNumber desde el JWT
+    @PostMapping("/{numeroRadicacion}")
+    public ResponseEntity<?> associateProcessToUser(
+            @PathVariable String numeroRadicacion
+    ) {
+        // Validación de número de radicación (23 dígitos)
+        if (!isValidNumeroRadicacion(numeroRadicacion)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", "El número de radicación debe tener exactamente 23 dígitos numéricos"));
+        }
+
+        // Resolver documentNumber desde el JWT (SecurityContext)
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autenticado");
+        }
+
+        String principal = auth.getName();
+        String documentNumber = null;
+        if (principal != null && !principal.isBlank()) {
+            try {
+                UUID supabaseId = UUID.fromString(principal);
+                Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
+                if (u.isPresent()) documentNumber = u.get().getDocumentNumber();
+            } catch (IllegalArgumentException ex) {
+                Optional<User> u2 = userRepository.findByEmail(principal);
+                if (u2.isPresent()) documentNumber = u2.get().getDocumentNumber();
+            }
+        }
+
+        if (documentNumber == null || documentNumber.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No fue posible resolver el usuario desde el token");
+        }
+
+        Optional<User> user = userRepository.findByDocumentNumber(documentNumber);
+        if (user.isEmpty()) {
+            return ResponseEntity.unprocessableEntity().body("Usuario no encontrado.");
+        }
+
+        // Validar existencia del proceso llamando a la API externa (no por repositorio local)
+        boolean processExists = apiClient.validateId(numeroRadicacion);
+        if (!processExists) {
+            return ResponseEntity.unprocessableEntity().body("Proceso no encontrado.");
+        }
+
+        // Asegurar que exista el registro en legal_process (y setear lastActionDate desde API)
+        if (!ensureLegalProcessExists(numeroRadicacion, documentNumber)) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("No fue posible crear el proceso legal en BD");
+        }
+
+        UserLegalProcessId id = new UserLegalProcessId(documentNumber, numeroRadicacion);
+        if (userLegalProcessRepository.existsById(id)) {
+            return ResponseEntity.unprocessableEntity().body("La asociación ya existe.");
+        }
+        // persistir con createdAt actual
+        UserLegalProcess association = new UserLegalProcess(id, OffsetDateTime.now());
+        userLegalProcessRepository.save(association);
+        return ResponseEntity.ok("Asociación creada correctamente.");
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<java.util.List<HistoryResponseDto>> getUserHistory() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String principal = auth.getName();
+        String resolvedDocumentNumber = null;
+        if (principal != null && !principal.isBlank()) {
+            try {
+                UUID supabaseId = UUID.fromString(principal);
+                Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
+                if (u.isPresent()) resolvedDocumentNumber = u.get().getDocumentNumber();
+            } catch (IllegalArgumentException ex) {
+                Optional<User> u2 = userRepository.findByEmail(principal);
+                if (u2.isPresent()) resolvedDocumentNumber = u2.get().getDocumentNumber();
+            }
+        }
+
+        if (resolvedDocumentNumber == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Optional<User> user = userRepository.findByDocumentNumber(resolvedDocumentNumber);
+        if (user.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        java.util.List<History> history = historyRepository.findByUserDocumentNumberOrderByDateDesc(resolvedDocumentNumber);
+        java.util.List<HistoryResponseDto> dtos = history.stream()
+                .map(h -> new HistoryResponseDto(h.getId(), h.getLegalProcessId(), h.getActivitySeriesId(), h.getDate(), h.getResult(), h.getCreatedAt(), h.getUserDocumentNumber()))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
