@@ -8,6 +8,7 @@ import com.justiconsulta.store.repository.HistoryRepository;
 import com.justiconsulta.store.repository.UserRepository;
 import com.justiconsulta.store.service.ActuationService;
 import com.justiconsulta.store.service.ApiClient;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -60,7 +61,20 @@ public class ActionController {
             @RequestParam(name = "pagina", required = false, defaultValue = "1") int pagina,
             @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
     ) {
-        ResponseEntity<String> response = apiClient.getProcessActuaciones(idProceso, pagina);
+        String resolvedId;
+        if (isValidNumeroRadicacion(idProceso)) {
+            Optional<String> idOpt = apiClient.getProcessIdByNumeroRadicacion(idProceso);
+            if (idOpt.isEmpty() || idOpt.get().isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(java.util.Map.of("message", "Proceso no encontrado."));
+            }
+            resolvedId = idOpt.get();
+        } else if (isNumeric(idProceso)) {
+            resolvedId = idProceso;
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(java.util.Map.of("message", "Parámetro inválido: debe ser número de radicación (23 dígitos) o idProceso numérico"));
+        }
+
+        ResponseEntity<String> response = apiClient.getProcessActuaciones(resolvedId, pagina);
 
         // resolve user
         String resolvedDocumentNumber = null;
@@ -87,7 +101,7 @@ public class ActionController {
             if (userOpt.isPresent()) {
                 History history = new History();
                 history.setUserDocumentNumber(resolvedDocumentNumber);
-                history.setLegalProcessId(idProceso);
+                history.setLegalProcessId(resolvedId);
                 history.setActivitySeriesId(null);
                 history.setDate(OffsetDateTime.now());
                 if (response != null && response.getBody() != null && !response.getBody().isBlank()) {

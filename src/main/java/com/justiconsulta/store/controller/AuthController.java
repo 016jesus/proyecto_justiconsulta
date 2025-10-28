@@ -48,7 +48,7 @@ public class AuthController {
     // Nuevo endpoint: actualiza la contraseña usando access_token (Bearer) de Supabase
     @PostMapping(value = "/update-password", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> updatePassword(@Valid @RequestBody UpdatePasswordRequest request,
-                                            @RequestHeader(value = "Authorization", required = false) String authorization) {
+                                            @RequestHeader(value = "Authorization", required = true) String authorization) {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Falta token Bearer en Authorization");
         }

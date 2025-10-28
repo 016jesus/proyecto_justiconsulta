@@ -189,4 +189,59 @@ public class ApiClient {
         }
         return Optional.empty();
     }
+
+    // New: Resolve idProceso from NumeroRadicacion by calling external API and parsing response
+    public Optional<String> getProcessIdByNumeroRadicacion(String numeroRadicacion) {
+        if (!isValidNumeroRadicacion(numeroRadicacion)) return Optional.empty();
+        ResponseEntity<String> resp = getByNumeroRadicacion(numeroRadicacion, Map.of());
+        if (resp == null || !resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null || resp.getBody().isBlank()) {
+            return Optional.empty();
+        }
+        String body = resp.getBody();
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(body);
+            // 1) objeto con idProceso directo
+            if (root.isObject()) {
+                JsonNode idP = root.get("idProceso");
+                if (idP != null && (idP.isIntegralNumber() || idP.isTextual())) {
+                    String v = idP.asText();
+                    if (!v.isBlank()) return Optional.of(v);
+                }
+                // 1.1) clave 'id' o 'id_proceso'
+                JsonNode id = root.get("id");
+                if (id != null && (id.isIntegralNumber() || id.isTextual())) {
+                    String v = id.asText();
+                    if (!v.isBlank()) return Optional.of(v);
+                }
+                JsonNode idProc = root.get("id_proceso");
+                if (idProc != null && (idProc.isIntegralNumber() || idProc.isTextual())) {
+                    String v = idProc.asText();
+                    if (!v.isBlank()) return Optional.of(v);
+                }
+                // 1.2) arreglo bajo alguna clave conocida
+                JsonNode procesos = root.get("procesos");
+                if (procesos != null && procesos.isArray() && procesos.size() > 0) {
+                    JsonNode first = procesos.get(0);
+                    JsonNode idp = first.get("idProceso");
+                    if (idp != null) return Optional.ofNullable(idp.asText());
+                }
+            }
+            // 2) si el root es arreglo, tomar el primer elemento con idProceso
+            if (root.isArray() && root.size() > 0) {
+                for (int i = 0; i < root.size(); i++) {
+                    JsonNode el = root.get(i);
+                    JsonNode idP = el.get("idProceso");
+                    if (idP != null) return Optional.ofNullable(idP.asText());
+                    JsonNode id = el.get("id");
+                    if (id != null) return Optional.ofNullable(id.asText());
+                    JsonNode idProc = el.get("id_proceso");
+                    if (idProc != null) return Optional.ofNullable(idProc.asText());
+                }
+            }
+        } catch (Exception e) {
+            // ignore parse errors; return empty
+        }
+        return Optional.empty();
+    }
 }

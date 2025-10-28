@@ -1,6 +1,7 @@
 package com.justiconsulta.store.controller;
 
-import com.justiconsulta.store.dto.response.HistoryResponseDto;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.justiconsulta.store.dto.response.LegalProcessResponseDto;
 import com.justiconsulta.store.model.History;
 import com.justiconsulta.store.model.LegalProcess;
@@ -47,6 +48,14 @@ public class LegalProcessController {
     // Helper: valida número de radicación de 23 dígitos
     private boolean isValidNumeroRadicacion(String numeroRadicacion) {
         return numeroRadicacion != null && numeroRadicacion.matches("\\d{23}");
+    }
+
+    // Helper: si el valor parece numeroRadicacion (23 dígitos), resolver idProceso consultando la API
+    private Optional<String> resolveIdProcesoIfRadicacion(String maybeIdOrRad) {
+        if (isValidNumeroRadicacion(maybeIdOrRad)) {
+            return apiClient.getProcessIdByNumeroRadicacion(maybeIdOrRad);
+        }
+        return Optional.ofNullable(maybeIdOrRad);
     }
 
     // Helper encapsulado: garantiza la existencia de legal_process y fija lastActionDate desde la API
@@ -201,13 +210,13 @@ public class LegalProcessController {
                     Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
                     if (u.isPresent()) {
                         resolvedDocumentNumber = u.get().getDocumentNumber();
-                    }
+                      }
                 } catch (IllegalArgumentException ex) {
                     // no es UUID; intentar por email
                     Optional<User> u2 = userRepository.findByEmail(principal);
                     if (u2.isPresent()) {
                         resolvedDocumentNumber = u2.get().getDocumentNumber();
-                    }
+                      }
                 }
             }
         }
@@ -332,8 +341,20 @@ public class LegalProcessController {
             @PathVariable String idProceso,
             @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
     ) {
-        ResponseEntity<String> response = apiClient.getProcessDetail(idProceso);
+        String resolvedId;
+        if (isValidNumeroRadicacion(idProceso)) {
+            Optional<String> idOpt = apiClient.getProcessIdByNumeroRadicacion(idProceso);
+            if (idOpt.isEmpty() || idOpt.get().isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of("message", "Proceso no encontrado."));
+            }
+            resolvedId = idOpt.get();
+        } else if (isNumeric(idProceso)) {
+            resolvedId = idProceso;
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Parámetro inválido: debe ser número de radicación (23 dígitos) o idProceso numérico"));
+        }
 
+        ResponseEntity<String> response = apiClient.getProcessDetail(resolvedId);
 
         String resolvedDocumentNumber = null;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -345,12 +366,12 @@ public class LegalProcessController {
                     Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
                     if (u.isPresent()) {
                         resolvedDocumentNumber = u.get().getDocumentNumber();
-                    }
+                      }
                 } catch (IllegalArgumentException ex) {
                     Optional<User> u2 = userRepository.findByEmail(principal);
                     if (u2.isPresent()) {
                         resolvedDocumentNumber = u2.get().getDocumentNumber();
-                    }
+                      }
                 }
             }
         }
@@ -364,7 +385,7 @@ public class LegalProcessController {
             if (userOpt.isPresent()) {
                 History history = new History();
                 history.setUserDocumentNumber(resolvedDocumentNumber);
-                history.setLegalProcessId(idProceso);
+                history.setLegalProcessId(resolvedId);
                 history.setActivitySeriesId(null);
                 history.setDate(OffsetDateTime.now());
                 if (response != null && response.getBody() != null) {
@@ -379,7 +400,7 @@ public class LegalProcessController {
                 try {
                     historyRepository.save(history);
                 } catch (Exception e) {
-                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, idProceso, e.getMessage());
+                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, resolvedId, e.getMessage());
                 }
             }
         }
@@ -395,102 +416,6 @@ public class LegalProcessController {
         return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
     }
 
-    // Removed request body; ahora se obtiene el documentNumber desde el JWT
-    @PostMapping("/{numeroRadicacion}")
-    public ResponseEntity<?> associateProcessToUser(
-            @PathVariable String numeroRadicacion
-    ) {
-        // Validación de número de radicación (23 dígitos)
-        if (!isValidNumeroRadicacion(numeroRadicacion)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("message", "El número de radicación debe tener exactamente 23 dígitos numéricos"));
-        }
-
-        // Resolver documentNumber desde el JWT (SecurityContext)
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No autenticado");
-        }
-
-        String principal = auth.getName();
-        String documentNumber = null;
-        if (principal != null && !principal.isBlank()) {
-            try {
-                UUID supabaseId = UUID.fromString(principal);
-                Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
-                if (u.isPresent()) documentNumber = u.get().getDocumentNumber();
-            } catch (IllegalArgumentException ex) {
-                Optional<User> u2 = userRepository.findByEmail(principal);
-                if (u2.isPresent()) documentNumber = u2.get().getDocumentNumber();
-            }
-        }
-
-        if (documentNumber == null || documentNumber.isBlank()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No fue posible resolver el usuario desde el token");
-        }
-
-        Optional<User> user = userRepository.findByDocumentNumber(documentNumber);
-        if (user.isEmpty()) {
-            return ResponseEntity.unprocessableEntity().body("Usuario no encontrado.");
-        }
-
-        // Validar existencia del proceso llamando a la API externa (no por repositorio local)
-        boolean processExists = apiClient.validateId(numeroRadicacion);
-        if (!processExists) {
-            return ResponseEntity.unprocessableEntity().body("Proceso no encontrado.");
-        }
-
-        // Asegurar que exista el registro en legal_process (y setear lastActionDate desde API)
-        if (!ensureLegalProcessExists(numeroRadicacion, documentNumber)) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("No fue posible crear el proceso legal en BD");
-        }
-
-        UserLegalProcessId id = new UserLegalProcessId(documentNumber, numeroRadicacion);
-        if (userLegalProcessRepository.existsById(id)) {
-            return ResponseEntity.unprocessableEntity().body("La asociación ya existe.");
-        }
-        // persistir con createdAt actual
-        UserLegalProcess association = new UserLegalProcess(id, OffsetDateTime.now());
-        userLegalProcessRepository.save(association);
-        return ResponseEntity.ok("Asociación creada correctamente.");
-    }
-
-    @GetMapping("/history")
-    public ResponseEntity<java.util.List<HistoryResponseDto>> getUserHistory() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        String principal = auth.getName();
-        String resolvedDocumentNumber = null;
-        if (principal != null && !principal.isBlank()) {
-            try {
-                UUID supabaseId = UUID.fromString(principal);
-                Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
-                if (u.isPresent()) resolvedDocumentNumber = u.get().getDocumentNumber();
-            } catch (IllegalArgumentException ex) {
-                Optional<User> u2 = userRepository.findByEmail(principal);
-                if (u2.isPresent()) resolvedDocumentNumber = u2.get().getDocumentNumber();
-            }
-        }
-
-        if (resolvedDocumentNumber == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        Optional<User> user = userRepository.findByDocumentNumber(resolvedDocumentNumber);
-        if (user.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        java.util.List<History> history = historyRepository.findByUserDocumentNumberOrderByDateDesc(resolvedDocumentNumber);
-        java.util.List<HistoryResponseDto> dtos = history.stream()
-                .map(h -> new HistoryResponseDto(h.getId(), h.getLegalProcessId(), h.getActivitySeriesId(), h.getDate(), h.getResult(), h.getCreatedAt(), h.getUserDocumentNumber()))
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(dtos);
-    }
-
     // New endpoint: subjects for a process
     @GetMapping("/{idProceso}/subjects")
     public ResponseEntity<?> getProcessSubjects(
@@ -498,7 +423,20 @@ public class LegalProcessController {
             @RequestParam(name = "pagina", required = false, defaultValue = "1") int pagina,
             @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
     ) {
-        ResponseEntity<String> response = apiClient.getProcessSubjects(idProceso, pagina);
+        String resolvedId;
+        if (isValidNumeroRadicacion(idProceso)) {
+            Optional<String> idOpt = apiClient.getProcessIdByNumeroRadicacion(idProceso);
+            if (idOpt.isEmpty() || idOpt.get().isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of("message", "Proceso no encontrado."));
+            }
+            resolvedId = idOpt.get();
+        } else if (isNumeric(idProceso)) {
+            resolvedId = idProceso;
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Parámetro inválido: debe ser número de radicación (23 dígitos) o idProceso numérico"));
+        }
+
+        ResponseEntity<String> response = apiClient.getProcessSubjects(resolvedId, pagina);
 
         // resolve user same as other methods
         String resolvedDocumentNumber = null;
@@ -525,7 +463,7 @@ public class LegalProcessController {
             if (userOpt.isPresent()) {
                 History history = new History();
                 history.setUserDocumentNumber(resolvedDocumentNumber);
-                history.setLegalProcessId(idProceso);
+                history.setLegalProcessId(resolvedId);
                 history.setActivitySeriesId(null);
                 history.setDate(OffsetDateTime.now());
                 if (response != null && response.getBody() != null && !response.getBody().isBlank()) {
@@ -540,7 +478,7 @@ public class LegalProcessController {
                 try {
                     historyRepository.save(history);
                 } catch (Exception e) {
-                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, idProceso, e.getMessage());
+                    log.warn("Failed to save history for user {} and process {}: {}", resolvedDocumentNumber, resolvedId, e.getMessage());
                 }
             }
         }
@@ -562,7 +500,20 @@ public class LegalProcessController {
             @PathVariable String idProceso,
             @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
     ) {
-        ResponseEntity<String> response = apiClient.getProcessDocuments(idProceso);
+        String resolvedId;
+        if (isValidNumeroRadicacion(idProceso)) {
+            Optional<String> idOpt = apiClient.getProcessIdByNumeroRadicacion(idProceso);
+            if (idOpt.isEmpty() || idOpt.get().isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of("message", "Proceso no encontrado."));
+            }
+            resolvedId = idOpt.get();
+        } else if (isNumeric(idProceso)) {
+            resolvedId = idProceso;
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Parámetro inválido: debe ser número de radicación (23 dígitos) o idProceso numérico"));
+        }
+
+        ResponseEntity<String> response = apiClient.getProcessDocuments(resolvedId);
 
         // resolve user
         String resolvedDocumentNumber = null;
@@ -589,7 +540,7 @@ public class LegalProcessController {
             if (userOpt.isPresent()) {
                 History history = new History();
                 history.setUserDocumentNumber(resolvedDocumentNumber);
-                history.setLegalProcessId(idProceso);
+                history.setLegalProcessId(resolvedId);
                 history.setActivitySeriesId(null);
                 history.setDate(OffsetDateTime.now());
                 if (response != null && response.getBody() != null && !response.getBody().isBlank()) {
@@ -620,3 +571,4 @@ public class LegalProcessController {
         return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
     }
 }
+
