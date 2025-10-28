@@ -46,6 +46,14 @@ public class ActionController {
         return actuationService.createActionAndNotify(legalProcessId, description);
     }
 
+    private boolean isValidNumeroRadicacion(String value) {
+        return value != null && value.matches("\\d{23}");
+    }
+
+    private boolean isNumeric(String value) {
+        return value != null && value.matches("\\d+");
+    }
+
     @GetMapping("/{idProceso}")
     public ResponseEntity<?> getActuaciones(
             @PathVariable String idProceso,

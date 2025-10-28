@@ -70,6 +70,66 @@ public class LegalProcessController {
         }
     }
 
+    // Helper para resolver el documentNumber desde el Authentication (JWT) o vacío si no se puede
+    private Optional<String> resolveDocumentNumberFromAuth() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
+            return Optional.empty();
+        }
+        String principal = auth.getName();
+        if (principal == null || principal.isBlank()) return Optional.empty();
+        try {
+            UUID supabaseId = UUID.fromString(principal);
+            Optional<User> u = userRepository.findBySupabaseUserId(supabaseId);
+            if (u.isPresent()) return Optional.ofNullable(u.get().getDocumentNumber());
+        } catch (IllegalArgumentException ex) {
+            Optional<User> u2 = userRepository.findByEmail(principal);
+            if (u2.isPresent()) return Optional.ofNullable(u2.get().getDocumentNumber());
+        }
+        return Optional.empty();
+    }
+
+    // Helper adicional: numérico genérico
+    private boolean isNumeric(String value) {
+        return value != null && value.matches("\\d+");
+    }
+
+    @DeleteMapping("/{numeroRadicacion}")
+    public ResponseEntity<?> removeAssociation(
+            @PathVariable String numeroRadicacion
+    ) {
+        // Validación de número de radicación (23 dígitos)
+        if (!isValidNumeroRadicacion(numeroRadicacion)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", "El número de radicación debe tener exactamente 23 dígitos numéricos"));
+        }
+
+        Optional<String> documentNumberOpt = resolveDocumentNumberFromAuth();
+        if (documentNumberOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "No autenticado o no se pudo resolver el usuario desde el token"));
+        }
+        String documentNumber = documentNumberOpt.get();
+
+        Optional<User> userOpt = userRepository.findByDocumentNumber(documentNumber);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.unprocessableEntity().body(Map.of("message", "Usuario no encontrado."));
+        }
+
+        UserLegalProcess.UserLegalProcessId id = new UserLegalProcessId(documentNumber, numeroRadicacion);
+        if (!userLegalProcessRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "La asociación no existe."));
+        }
+
+        try {
+            userLegalProcessRepository.deleteById(id);
+        } catch (Exception e) {
+            log.warn("Error al eliminar la asociación para usuario {} y proceso {}: {}", documentNumber, numeroRadicacion, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "No fue posible eliminar la asociación."));
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Asociación eliminada correctamente."));
+    }
+
     @GetMapping
     public ResponseEntity<List<LegalProcessResponseDto>> getAllLegalProcesses() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -163,7 +223,9 @@ public class LegalProcessController {
             if (userOpt.isPresent()) {
                 History history = new History();
                 history.setUserDocumentNumber(resolvedDocumentNumber);
-                history.setLegalProcessId(numeroRadicacion);
+                // Guardar siempre el idProceso (intentar extraerlo desde la respuesta externa)
+                String idParaHistorial = extractIdProcesoFromResponse(numeroRadicacion, response);
+                history.setLegalProcessId(idParaHistorial);
                 history.setActivitySeriesId(null);
                 history.setDate(OffsetDateTime.now());
                 if (response != null && response.getBody() != null) {
@@ -194,6 +256,75 @@ public class LegalProcessController {
             return ResponseEntity.ok(Map.of("message", "No content from external API"));
         }
         return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
+    }
+
+    // Endpoint público que consulta el proceso externo sin persistir historial
+    @GetMapping("/public/{numeroRadicacion}")
+    public ResponseEntity<?> publicGetLegalProcess(
+            @PathVariable String numeroRadicacion,
+            @RequestParam(name = "SoloActivos", required = false, defaultValue = "false") boolean soloActivos,
+            @RequestParam(name = "pagina", required = false, defaultValue = "1") int pagina
+    ) {
+        if (!isValidNumeroRadicacion(numeroRadicacion)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", "El número de radicación debe tener exactamente 23 dígitos numéricos"));
+        }
+        Map<String, String> queryParams = new HashMap<>();
+        queryParams.put("SoloActivos", String.valueOf(soloActivos));
+        queryParams.put("pagina", String.valueOf(pagina));
+        ResponseEntity<String> response = apiClient.getByNumeroRadicacion(numeroRadicacion, queryParams);
+        if (response == null) return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", "No response from external API"));
+        if (response.getStatusCode().is2xxSuccessful()) return ResponseEntity.ok(response.getBody() != null ? response.getBody() : Map.of("message","No content from external API"));
+        return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
+    }
+
+    // Intenta extraer un idProceso corto desde la respuesta externa; si no se encuentra, devuelve numeroRadicacion (y lo registra en logs)
+    private String extractIdProcesoFromResponse(String numeroRadicacion, ResponseEntity<String> response) {
+        if (response == null || response.getBody() == null) return numeroRadicacion;
+        String body = response.getBody();
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            JsonNode root = mapper.readTree(body);
+            // buscar campos comunes
+            List<String> candidates = new ArrayList<>();
+            if (root.isObject()) {
+                if (root.has("idProceso")) candidates.add(root.get("idProceso").asText());
+                if (root.has("id")) candidates.add(root.get("id").asText());
+                if (root.has("id_proceso")) candidates.add(root.get("id_proceso").asText());
+            }
+            // si es array, revisar primer elemento
+            if (root.isArray() && !root.isEmpty()) {
+                JsonNode first = root.get(0);
+                if (first.has("idProceso")) candidates.add(first.get("idProceso").asText());
+                if (first.has("id")) candidates.add(first.get("id").asText());
+                if (first.has("id_proceso")) candidates.add(first.get("id_proceso").asText());
+            }
+            // buscar recursivamente claves que parezcan idProceso
+            if (candidates.isEmpty()) {
+                // recorrer campos de primer nivel buscando un campo corto numérico
+                java.util.Iterator<String> it = root.fieldNames();
+                while (it.hasNext()) {
+                    String name = it.next();
+                    JsonNode val = root.get(name);
+                    String v = val != null ? val.asText() : null;
+                    if (v != null && v.matches("\\d{3,12}")) {
+                        candidates.add(v);
+                    }
+                }
+            }
+            for (String c : candidates) {
+                if (c != null && !c.isBlank()) {
+                    // preferir valores significativamente más cortos que numeroRadicacion
+                    if (c.length() < numeroRadicacion.length()) return c;
+                    // o cualquier no vacío
+                    return c;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("No se pudo parsear body para extraer idProceso: {}", e.getMessage());
+        }
+        log.warn("No se pudo extraer idProceso desde la respuesta externa para numeroRadicacion={}, se usará el numero completo en historial", numeroRadicacion);
+        return numeroRadicacion;
     }
 
     @GetMapping("/detail/{idProceso}")
