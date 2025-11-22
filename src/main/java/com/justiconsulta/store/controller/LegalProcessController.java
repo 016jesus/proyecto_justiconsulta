@@ -666,5 +666,32 @@ public class LegalProcessController {
         }
         return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
     }
+
+    @GetMapping("/{idProceso}/actuaciones")
+    public ResponseEntity<?> getProcessActuaciones(
+            @PathVariable String idProceso,
+            @RequestParam(name = "pagina", required = false, defaultValue = "1") int pagina,
+            @RequestHeader(value = "X-Document-Number", required = false) String documentNumberHeader
+    ) {
+        String resolvedId;
+        if (isValidNumeroRadicacion(idProceso)) {
+            Optional<String> idOpt = apiClient.getProcessIdByNumeroRadicacion(idProceso);
+            if (idOpt.isEmpty() || idOpt.get().isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of("message", "Proceso no encontrado."));
+            }
+            resolvedId = idOpt.get();
+        } else if (isNumeric(idProceso)) {
+            resolvedId = idProceso;
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Parámetro inválido."));
+        }
+        //llamada a la API -> apiclient
+        ResponseEntity<String> response = apiClient.getProcessActuaciones(resolvedId, pagina);
+        // podemos registrar el hisotrial que el user vio actucin logica de getprocessdetaiñ
+        if (response == null) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", "Sin respuesta de la Rama Judicial"));
+        }
+        return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
+    }
 }
 
