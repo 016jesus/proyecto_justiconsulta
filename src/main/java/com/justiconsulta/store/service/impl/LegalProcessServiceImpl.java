@@ -491,5 +491,38 @@ public class LegalProcessServiceImpl implements ILegalProcessService {
         log.warn("No se pudo extraer idProceso desde la respuesta externa para numeroRadicacion={}, se usará el numero completo en historial", numeroRadicacion);
         return numeroRadicacion;
     }
-}
 
+    /**
+     * Método auxiliar para obtener información del despacho desde la API
+     */
+    private String getDespachoFromApi(String numeroRadicacion) {
+        try {
+            Map<String, String> queryParams = new HashMap<>();
+            queryParams.put("SoloActivos", "false");
+            queryParams.put("pagina", "1");
+            ResponseEntity<String> response = apiClient.getByNumeroRadicacion(numeroRadicacion, queryParams);
+
+            if (response != null && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode root = mapper.readTree(response.getBody());
+
+                // Buscar el campo "despacho" en la respuesta
+                if (root.has("procesos") && root.get("procesos").isArray() && !root.get("procesos").isEmpty()) {
+                    JsonNode firstProcess = root.get("procesos").get(0);
+                    if (firstProcess.has("despacho")) {
+                        return firstProcess.get("despacho").asText();
+                    }
+                }
+
+                // Alternativa: buscar directamente en el objeto raíz
+                if (root.has("despacho")) {
+                    return root.get("despacho").asText();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("No se pudo obtener información del despacho para el proceso {}: {}", numeroRadicacion, e.getMessage());
+        }
+
+        return "Información no disponible";
+    }
+}

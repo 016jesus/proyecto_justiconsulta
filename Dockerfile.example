@@ -1,0 +1,104 @@
+# ==========================================
+# Dockerfile para JustiConsulta
+# ==========================================
+# Este Dockerfile muestra que el JAR es autocontenido
+# NO necesitas copiar archivos de migración por separado
+# ==========================================
+
+# Etapa 1: Build (opcional - si quieres construir dentro del container)
+FROM maven:3.9-eclipse-temurin-21 AS builder
+WORKDIR /build
+
+# Copiar archivos de proyecto
+COPY pom.xml .
+COPY src ./src
+
+# Construir el JAR
+RUN mvn clean package -DskipTests
+
+# ==========================================
+# Etapa 2: Runtime
+# ==========================================
+FROM eclipse-temurin:21-jre-alpine
+
+# Metadata
+LABEL maintainer="justiconsulta@example.com"
+LABEL description="JustiConsulta API con Liquibase"
+LABEL version="0.0.1-SNAPSHOT"
+
+# Crear usuario no-root
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
+# Directorio de trabajo
+WORKDIR /app
+
+# Copiar JAR desde builder O desde tu máquina local
+# Opción 1: Si usaste la etapa builder
+COPY --from=builder /build/target/store-0.0.1-SNAPSHOT.jar app.jar
+
+# Opción 2: Si ya tienes el JAR construido localmente
+# COPY target/store-0.0.1-SNAPSHOT.jar app.jar
+
+# ==========================================
+# IMPORTANTE: ¡NO necesitas copiar las migraciones!
+# Las migraciones YA ESTÁN dentro del JAR
+# ==========================================
+# ❌ NO HACER:
+# COPY src/main/resources/db/changelog /app/db/changelog
+#
+# ✅ CORRECTO:
+# El JAR ya incluye todo en BOOT-INF/classes/db/changelog/
+# ==========================================
+
+# Exponer puerto
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+
+# Variables de entorno por defecto (sobrescribibles)
+ENV JAVA_OPTS="-Xms512m -Xmx1024m" \
+    SERVER_PORT=8080 \
+    SPRING_PROFILES_ACTIVE=prod
+
+# Ejecutar aplicación
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+# ==========================================
+# USO:
+# ==========================================
+#
+# 1. Construir imagen (sin build interno):
+#    docker build -t justiconsulta:latest .
+#
+# 2. Ejecutar con variables de entorno:
+#    docker run -p 8080:8080 \
+#      -e JDBC_DATABASE_URL="jdbc:postgresql://host:5432/db" \
+#      -e SUPABASE_USER="postgres.xxx" \
+#      -e SUPABASE_PASS="password" \
+#      -e JWT_SECRET_KEY="your-secret" \
+#      -e API_SECRET_KEY="your-api-key" \
+#      justiconsulta:latest
+#
+# 3. O usando archivo .env:
+#    docker run -p 8080:8080 --env-file .env justiconsulta:latest
+#
+# 4. Docker Compose (ver docker-compose.yml)
+#
+# ==========================================
+# VERIFICACIÓN:
+# ==========================================
+#
+# Ver logs de Liquibase:
+#   docker logs <container-id> | grep Liquibase
+#
+# Entrar al container:
+#   docker exec -it <container-id> sh
+#
+# Verificar migraciones en el JAR (dentro del container):
+#   jar -tf app.jar | grep changelog
+#
+# ==========================================
+
