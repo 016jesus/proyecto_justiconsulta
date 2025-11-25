@@ -39,7 +39,7 @@ public class EmailTemplateService {
                         overflow: hidden;
                     }
                     .header {
-                        background: linear-gradient(180deg, var(--navy) 0%%, rgba(15,23,42,0.95) 100%%);
+                        background: linear-gradient(135deg, var(--navy) 0%%, #1a2438 50%%, rgba(217,119,6,0.15) 100%%);
                         padding: 36px 20px;
                         text-align: center;
                     }
@@ -64,30 +64,38 @@ public class EmailTemplateService {
                         margin-top: 0;
                         font-size: 20px;
                     }
+                    .content h3 {
+                        color: var(--navy);
+                        font-size: 18px;
+                        border-bottom: 2px solid var(--amber);
+                        padding-bottom: 8px;
+                    }
                     .button {
                         display: inline-block;
                         padding: 12px 28px;
-                        background: var(--amber);
+                        background: linear-gradient(135deg, var(--amber) 0%%, #f59e0b 100%%);
                         color: #0f172a !important;
                         text-decoration: none;
                         border-radius: 8px;
                         font-weight: 700;
                         margin: 20px 0;
                         transition: transform 0.12s ease-in-out, box-shadow 0.12s;
+                        box-shadow: 0 4px 12px rgba(217,119,6,0.25);
                     }
                     .button:hover {
                         transform: translateY(-3px);
-                        box-shadow: 0 8px 20px rgba(217,119,6,0.18);
+                        box-shadow: 0 12px 28px rgba(217,119,6,0.35);
+                        background: linear-gradient(135deg, #f59e0b 0%%, var(--amber) 100%%);
                     }
                     .info-box {
-                        background-color: #fff7ed;
+                        background: linear-gradient(135deg, rgba(217,119,6,0.08) 0%%, rgba(217,119,6,0.04) 100%%);
                         border-left: 4px solid var(--amber);
                         padding: 14px 18px;
                         margin: 18px 0;
                         border-radius: 6px;
                     }
                     .footer {
-                        background-color: var(--navy);
+                        background: linear-gradient(90deg, var(--navy) 0%%, #1a2438 50%%, rgba(217,119,6,0.1) 100%%);
                         color: #ffffff;
                         padding: 22px 30px;
                         text-align: center;

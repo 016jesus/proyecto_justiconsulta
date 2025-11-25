@@ -12,5 +12,6 @@ public interface UserLegalProcessRepository extends JpaRepository<UserLegalProce
     @Query("SELECT u.id.legalProcessId FROM UserLegalProcess u WHERE u.id.userDocumentNumber = :documentNumber")
     List<String> findProcessIdsByUserDocumentNumber(@Param("documentNumber") String documentNumber);
 
-
+    @Query("SELECT u FROM UserLegalProcess u WHERE u.id.userDocumentNumber = :documentNumber")
+    List<UserLegalProcess> findByUserDocumentNumber(@Param("documentNumber") String documentNumber);
 }

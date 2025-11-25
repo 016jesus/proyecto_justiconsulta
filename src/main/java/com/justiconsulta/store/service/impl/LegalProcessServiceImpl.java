@@ -36,15 +36,17 @@ public class LegalProcessServiceImpl implements ILegalProcessService {
     private final UserRepository userRepository;
     private final UserLegalProcessRepository userLegalProcessRepository;
     private final HistoryRepository historyRepository;
+    private final NotificationServiceImpl notificationService;
 
     public LegalProcessServiceImpl(LegalProcessRepository legalProcessRepository, ApiClient apiClient,
                                    UserRepository userRepository, UserLegalProcessRepository userLegalProcessRepository,
-                                   HistoryRepository historyRepository) {
+                                   HistoryRepository historyRepository, NotificationServiceImpl notificationService) {
         this.legalProcessRepository = legalProcessRepository;
         this.apiClient = apiClient;
         this.userRepository = userRepository;
         this.userLegalProcessRepository = userLegalProcessRepository;
         this.historyRepository = historyRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -73,6 +75,12 @@ public class LegalProcessServiceImpl implements ILegalProcessService {
 
         try {
             userLegalProcessRepository.deleteById(id);
+
+            // Enviar notificación al usuario
+            User user = userOpt.get();
+            notificationService.sendProcessDeletedNotification(user, numeroRadicacion);
+
+            log.info("Proceso {} eliminado del usuario {} y notificación enviada", numeroRadicacion, documentNumber);
         } catch (Exception e) {
             log.warn("Error al eliminar la asociación para usuario {} y proceso {}: {}", documentNumber, numeroRadicacion, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
